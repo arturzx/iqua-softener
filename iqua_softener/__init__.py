@@ -1,1 +1,7 @@
-from .iqua import IquaSoftener, IquaSoftenerException, IquaSoftenerData, IquaSoftenerState, IquaSoftenerVolumeUnit
+from .iqua import (
+    IquaSoftener,
+    IquaSoftenerException,
+    IquaSoftenerData,
+    IquaSoftenerState,
+    IquaSoftenerVolumeUnit,
+)
