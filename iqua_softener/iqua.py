@@ -138,7 +138,7 @@ class IquaSoftener:
                 json = {"waterShutoffValve": state}
             else:
                 raise IquaSoftenerException(
-                    f"Invalid state for water shut off valve."
+                    "Invalid state for water shut off valve."
                 )
             response = session.put(url, json=json, headers=headers)
             if response.status_code == 401:
