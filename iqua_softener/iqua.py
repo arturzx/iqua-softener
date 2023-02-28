@@ -74,11 +74,7 @@ class IquaSoftener:
 
     def get_data(self) -> IquaSoftenerData:
         with requests.Session() as session:
-            if self._token is None or (
-                self._token_expiration_timestamp is not None
-                and datetime.now() > self._token_expiration_timestamp
-            ):
-                self._update_token(session)
+            self._check_token(session)
             url = self._get_url(f"system/{self._device_serial_number}/dashboard")
             headers = self._get_headers()
             response = session.get(url, headers=headers)
@@ -96,13 +92,9 @@ class IquaSoftener:
             response_data = response.json()
             if response_data.get("code") != "OK":
                 raise IquaSoftenerException(
-                    f'Invalid response code ({response_data["code"]}: {response_data["message"]}) for data request'
+                    f'Invalid response code for data request: {response_data["code"]} ({response_data["message"]})'
                 )
             data = response_data["data"]
-            if "waterShutoffValveReq" in data:
-                water_shutoff_valve_state = int(data["waterShutoffValveReq"]["value"])
-            else:
-                water_shutoff_valve_state = 0
             return IquaSoftenerData(
                 timestamp=datetime.now(),
                 model=f'{data["modelDescription"]["value"]} ({data["modelId"]["value"]})',
@@ -122,33 +114,42 @@ class IquaSoftener:
                 salt_level_percent=int(data["saltLevelTenths"]["percent"]),
                 out_of_salt_estimated_days=int(data["outOfSaltEstDays"]["value"]),
                 hardness_grains=int(data["hardnessGrains"]["value"]),
-                water_shutoff_valve_state=water_shutoff_valve_state
+                water_shutoff_valve_state=int(data["waterShutoffValveReq"]["value"])
             )
 
-    def valve_shutoff(self, state):
+    def set_water_shutoff_valve(self, state: int):
+        if state not in (0, 1):
+            raise ValueError("Invalid state for water shut off valve (should be 0 or 1).")
         with requests.Session() as session:
-            if self._token is None or (
-                self._token_expiration_timestamp is not None
-                and datetime.now() > self._token_expiration_timestamp
-            ):
-                self._update_token(session)
+            self._check_token(session)
             url = self._get_url(f"system/{self._device_serial_number}/properties")
             headers = self._get_headers()
-            if state in (0, 1):
-                json = {"waterShutoffValve": state}
-            else:
-                raise IquaSoftenerException(
-                    "Invalid state for water shut off valve."
-                )
+            json = {"waterShutoffValve": state}
             response = session.put(url, json=json, headers=headers)
             if response.status_code == 401:
                 self._update_token(session)
                 response = session.put(url, json=json, headers=headers)
             elif response.status_code != 200:
                 raise IquaSoftenerException(
-                    f"Invalid status ({response.status_code}) for data request"
+                    f"Invalid status ({response.status_code}) for set water shutoff valve request"
                 )
-            return response.json()
+            if response.status_code != 200:
+                raise IquaSoftenerException(
+                    f"Invalid status ({response.status_code}) for set water shutoff valve request"
+                )
+            response_data = response.json()
+            if response_data.get("code") != "OK":
+                raise IquaSoftenerException(
+                    f'Invalid response code for set water shutoff valve request: {response_data["code"]} '
+                    f'({response_data["message"]})'
+                )
+
+    def _check_token(self, session: requests.Session):
+        if self._token is None or (
+                self._token_expiration_timestamp is not None
+                and datetime.now() > self._token_expiration_timestamp
+        ):
+            self._update_token(session)
 
     def _update_token(self, session: requests.Session):
         try:
@@ -168,7 +169,7 @@ class IquaSoftener:
         response_data = response.json()
         if response_data.get("code") != "OK":
             raise IquaSoftenerException(
-                f'Invalid response code ({response_data["code"]}: {response_data["message"]}) for token request'
+                f'Invalid response code for token request: {response_data["code"]} ({response_data["message"]})'
             )
         self._token = response_data["data"]["token"]
         self._token_type = response_data["data"]["tokenType"]
